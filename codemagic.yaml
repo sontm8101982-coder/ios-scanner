@@ -1,0 +1,40 @@
+workflows:
+  ios-unsigned:
+    name: IOScanner — IPA unsigned
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      xcode: latest
+      vars:
+        XCODE_PROJECT: "IOScanner.xcodeproj"
+        XCODE_SCHEME: "IOScanner"
+    scripts:
+      - name: Show toolchain
+        script: |
+          xcodebuild -version
+          sw_vers
+      - name: Install XcodeGen
+        script: |
+          brew install xcodegen || brew upgrade xcodegen
+      - name: Generate Xcode project
+        script: |
+          xcodegen generate
+      - name: Build unsigned IPA
+        script: |
+          # ENABLE_DEBUG_DYLIB=NO: bắt buộc cho app sideload (Sideloader/AltServer)
+          xcodebuild -project "$XCODE_PROJECT" -scheme "$XCODE_SCHEME" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            ENABLE_DEBUG_DYLIB=NO \
+            build 2>&1 | tee build.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          mkdir -p Payload
+          cp -R build/Build/Products/Debug-iphoneos/IOScanner.app Payload/
+          zip -qr IOScanner-unsigned.ipa Payload
+          ls -la IOScanner-unsigned.ipa
+    artifacts:
+      - IOScanner-unsigned.ipa
+      - build.log
+      - build/Build/Products/Debug-iphoneos/IOScanner.app
